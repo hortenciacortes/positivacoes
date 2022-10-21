@@ -1,18 +1,34 @@
 import { useEffect, useState } from "react";
 import { getData } from "../../server";
+import { dbCategory } from "../../server/dbCategory";
+import { dbProducts } from "../../server/dbProducts";
 
 import './styles.scss';
 
 export function Campanha() {
-  const [vendedor, setVendedor] = useState('VEN64');
-  const [duns, setDuns] = useState('');
-  const [data, setData] = useState(null);
+  const [vendedor, setVendedor] = useState('64');
+  const [eansSelects, setEansSelects] = useState([]);
+  const [arrayVendaEPP, setArrayVendaEPP] = useState(null);
   const [positivacoes, setPositivacoes] = useState([]);
   const [file, setFile] = useState(null);
+  const [categorysSelects, setCategorysSelects] = useState([]);
 
+  const dataCategory = dbCategory();
+  
   useEffect(() => {
-    file && setData(getData(file));
-  }, [file])
+    file && setArrayVendaEPP(getData(file));
+  }, [file]);
+  
+  useEffect(() => {
+    categorysSelects.length > 0 && getEans()
+    
+    function getEans() {
+      const dbProdcuts = dbProducts();
+      const eansCategorys = categorysSelects.map(category => dbProdcuts.filter(el => el.categoria === category).map(el => el.ean));
+      setEansSelects(prev => [...prev, ...eansCategorys]);
+    }
+  }, [categorysSelects]);
+
 
   function handleFile(e) {
     var file = new FileReader();
@@ -24,29 +40,38 @@ export function Campanha() {
     file.readAsText(e.target.files[0]);
   }
 
-  function handleDuns() {
-    const arrayDuns = duns.split(';');
+  function handleEans() {
+    eansSelects.forEach(item => {
+      item.forEach(ean => {
+        if(ean.length !== 13) {
+          alert('Ean inválido')
+          return false
+        }
+      });
+    });
 
-    arrayDuns.forEach(item => {
-      if(item.replace(/[^0-9]/g,'').length === 14) {
-        setPositivacoes([]);
-        handlePositivacoes(arrayDuns);
-      } else {
-        alert('Dun inválido')
-      }
-    })
+    setPositivacoes([]);
+    handlePositivacoes();
   }
   
-  function handlePositivacoes(arrayDuns) {
-    data.forEach(item => {
-      if(item.codvendedor === vendedor){
-        const filterDuns = arrayDuns.map(searchDun => item.duns.some(dun => dun === searchDun)).filter(el => el === true);
-
-        if(filterDuns.length === arrayDuns.length) {
-          setPositivacoes(prev => [...prev, item])
+  function handlePositivacoes() {
+    if(eansSelects.length !== 0) {      
+      arrayVendaEPP.forEach(venda => {
+        if(venda.codvendedor === vendedor){
+          const filterEans = eansSelects.map(groupEan => groupEan).map(searchEan => searchEan.some(se => venda.eans.some(ean => ean === se))).filter(el => el === true);
+  
+          if(filterEans.length === eansSelects.length) {
+            setPositivacoes(prev => [...prev, venda]);
+          }
         }
-      }
-    })
+      });
+    } else {
+      arrayVendaEPP.forEach(venda => {
+        if(venda.codvendedor === vendedor){
+          setPositivacoes(prev => [...prev, venda]);
+        }
+      });
+    }
   }
 
   return (
@@ -56,9 +81,26 @@ export function Campanha() {
         <div className="form">
           <label htmlFor="inputVend">Vendedor</label>
           <input type="text" name="" id="inputVend" value={vendedor} onChange={e => setVendedor(e.target.value)} />
-          <label htmlFor="inputDuns">Duns</label>
-          <input type="text" name="" id="inputDuns" value={duns} onChange={e => setDuns(e.target.value)} />
-          <button onClick={handleDuns}>Enviar</button>
+          <label htmlFor="inputEans">Eans</label>
+          <input type="text" name="" id="inputEans" value={eansSelects} onChange={e => setEansSelects([e.target.value.split(',')])} />
+          
+          <select name="categorys" id="categorys" onChange={e => setCategorysSelects(prev => [...prev, e.target.value])}>
+            {dataCategory.map(category => (
+              <option key={category} value={category}>{category}</option>
+            ))}
+          </select>
+          <div className="showCategorys">
+            {categorysSelects.length > 0 && categorysSelects.map(category => (
+              <span key={category}>{category}</span>
+            ))}
+            <button onClick={e => {
+              setCategorysSelects([]);
+              setEansSelects([])
+            }}>
+              Limpar
+            </button>
+          </div>
+          <button onClick={handleEans}>Enviar</button>
         </div>
         {positivacoes.length > 0 && 
           <div className="clientesPositivados">
@@ -66,7 +108,7 @@ export function Campanha() {
             <p>Positivações: {positivacoes.length}</p>
             <p>Clientes:</p>
             <pre id="positivacoes">{positivacoes.map(client => (
-              <p key={client.razaoSocial}>{client.razaoSocial}</p>
+              <p key={client.cnpjcliente}>{client.cnpjcliente}</p>
             ))}</pre>
           </div>
         }
